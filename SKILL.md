@@ -23,7 +23,7 @@ agent_created: true
 
 1. **Python 优先：** Windows 环境下 curl 传中文或复杂 JSON 容易失败，API 操作用 Python。
 2. **Token-in-URL 兜底：** Windows schannel SSL/TLS 经常连接失败，HTTPS URL 中嵌入 token 兜底。
-3. **双远程仓库：** origin 指向 Gitea（本地私有），github 指向 GitHub（远程公开）。
+3. **直推 GitHub：** origin 直接指向 GitHub，不经 Gitea 跳板。
 4. **VPN 检查优先：** 操作前先检测网络连通性。
 
 ## 流程
@@ -91,36 +91,34 @@ print('Clone:', r['clone_url'])
 "
 ```
 
-#### 操作C：推送代码到 GitHub
+#### 操作C：初始化本地仓库并推送到 GitHub
 
-1. 进入目标仓库目录
-2. 检查远程仓库：
+1. 进入目标目录
+2. 初始化并提交：
    ```bash
-   git remote -v
-   ```
-3. 如果还没有 github 远程：
-   ```bash
-   git remote add github https://cat0141:$(cat ~/.workbuddy/github_token)@github.com/cat0141/仓库名.git
-   ```
-4. 如果已有 github 远程但连接失败（schannel 错误）：
-   ```bash
-   # 把 push URL 改为带 token 的形式
-   git remote set-url --push github https://cat0141:TOKEN@github.com/cat0141/仓库名.git
-   ```
-5. 提交并推送：
-   ```bash
+   git init
    git add -A
-   git commit -m "提交信息"
-   git push github main
+   git commit -m "初始提交"
+   ```
+3. 添加远程并推送：
+   ```bash
+   # 添加 origin 指向 GitHub（带 token）
+   git remote add origin https://cat0141:$(python -c "print(open(r'C:/Users/ZhuanZ（无密码）/.workbuddy/github_token').read().strip())")@github.com/cat0141/仓库名.git
+   git push -u origin master
+   ```
+4. 如果已有远程但连接失败（schannel 错误）：
+   ```bash
+   # 改为带 token 的 URL
+   git remote set-url origin https://cat0141:TOKEN@github.com/cat0141/仓库名.git
+   git push origin master
    ```
 
-#### 操作D：同步 Gitea 到 GitHub
+#### 操作D：日常推送
 
 ```bash
-# 从 Gitea (origin) 拉取最新
-git pull origin main
-# 推送到 GitHub (github)
-git push github main
+git add -A
+git commit -m "提交信息"
+git push origin main
 ```
 
 ### 第4步：验证结果
@@ -193,20 +191,22 @@ GitHub 在中国大陆可能需要代理。检测步骤：
 
 **解决方案：** 用 Python 代替 curl，通过 `json.dumps()` 和 `encode('utf-8')` 构造请求体。
 
-### 双远程仓库最佳实践
+### 远程仓库配置
 
 ```bash
 # 查看当前远程
 git remote -v
 
-# origin -> Gitea（本地私有，日常推送）
-# github -> GitHub（远程公开，偶尔推送）
+# origin 直接指向 GitHub
+# push URL 带 token（避免 schannel 连接失败）
+# fetch URL 用干净形式（避免泄露 token）
+
+# 设置方式
+git remote set-url origin https://github.com/cat0141/仓库名.git
+git remote set-url --push origin https://cat0141:TOKEN@github.com/cat0141/仓库名.git
 
 # 日常操作
 git push origin main
-
-# 同步到 GitHub
-git push github main
 ```
 
 ### Token 安全
@@ -232,7 +232,7 @@ git push github main
 | 直接在对话中打印完整 token | 泄露到上下文 | 用 `$()` 引用变量 |
 | 跳过连通性检测直接推送 | 连接失败后排查困难 | 先 ping GitHub API |
 | 用 `--force` 推送 | 可能丢失远程提交 | 先 pull 再 push |
-| 把所有远程都叫 origin | 分不清哪个是哪个 | origin=Gitea, github=GitHub |
+| 把所有远程都叫 origin | 分不清哪个是 GitHub | 远程命名要有意义 |
 
 ## 质量自检清单
 
@@ -240,7 +240,7 @@ git push github main
 
 - [ ] 网络连通性已检测？
 - [ ] Token 已正确读取且未明文暴露？
-- [ ] 远程仓库地址正确（github 不是 origin）？
+- [ ] 远程仓库地址正确（直接指向 GitHub）？
 - [ ] 操作成功已验证（API 返回 200 或 git push 成功）？
 
 ## Skill 演进原则
@@ -256,4 +256,5 @@ git push github main
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| **v1.1** | 2026-05-27 | 移除 Gitea 跳板。origin 直接指向 GitHub，简化推送流程为单远程仓库。 |
 | **v1.0** | 2026-05-27 | 初始版本。基于 douyin-script-expert 推送实战经验创建。内置：网络检测、token 管理、仓库 CRUD、推送流程、VPN/代理配置、Windows schannel 解决方案、双远程仓库最佳实践。 |
